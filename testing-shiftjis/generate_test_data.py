@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-JA16SJISTILDE / Shift-JIS 测试数据生成器
+JA16SJISTILDE / Shift-JIS Test Data Generator
 
-生成全量测试数据，用于验证 Oracle JA16SJISTILDE 到 UTF-8 的字符转换。
+Generates full test data for verifying Oracle JA16SJISTILDE to UTF-8 character conversion.
 
-输出文件:
-- test_data.csv: 主测试数据 (UTF-8 编码)
-- test_data_sjis.csv: Shift-JIS 编码版本
-- verify_utf8.html: UTF-8 验证网页
-- verify_sjis.html: Shift-JIS 验证网页
-- expected_utf8.csv: 预期导出结果 (UTF-8)
+Output files:
+- test_data.csv: Main test data (UTF-8 encoded)
+- test_data_sjis.csv: Shift-JIS encoded version
+- verify_utf8.html: UTF-8 verification web page
+- verify_sjis.html: Shift-JIS verification web page
+- expected_utf8.csv: Expected export results (UTF-8)
 """
 
 import csv
 import os
 from typing import List, Tuple, Optional
 
-# JA16SJISTILDE 使用 CP932 (Windows-31J) 映射
-# Python 的 'cp932' 编码等同于 JA16SJISTILDE
+# JA16SJISTILDE uses CP932 (Windows-31J) mapping
+# Python's 'cp932' encoding is equivalent to JA16SJISTILDE
 SJIS_ENCODING = 'cp932'
 
 
 def sjis_to_row_col(sjis_code: int) -> Tuple[int, int]:
-    """将 Shift-JIS 双字节编码转换为 JIS 区位码"""
+    """Convert Shift-JIS double-byte code to JIS row/column (ku/ten)."""
     high = (sjis_code >> 8) & 0xFF
     low = sjis_code & 0xFF
 
@@ -44,15 +44,15 @@ def sjis_to_row_col(sjis_code: int) -> Tuple[int, int]:
 
 
 def is_valid_sjis_doublebyte(sjis_code: int) -> bool:
-    """检查是否为有效的 Shift-JIS 双字节编码"""
+    """Check if a code is a valid Shift-JIS double-byte encoding."""
     high = (sjis_code >> 8) & 0xFF
     low = sjis_code & 0xFF
 
-    # 首字节范围: 0x81-0x9F 或 0xE0-0xFC
+    # Lead byte range: 0x81-0x9F or 0xE0-0xFC
     if not ((0x81 <= high <= 0x9F) or (0xE0 <= high <= 0xFC)):
         return False
 
-    # 次字节范围: 0x40-0x7E 或 0x80-0xFC
+    # Trail byte range: 0x40-0x7E or 0x80-0xFC
     if not ((0x40 <= low <= 0x7E) or (0x80 <= low <= 0xFC)):
         return False
 
@@ -60,43 +60,43 @@ def is_valid_sjis_doublebyte(sjis_code: int) -> bool:
 
 
 def is_pua_character(sjis_code: int) -> bool:
-    """检查是否为 PUA (私有使用区) 字符
+    """Check if a character is in PUA (Private Use Area).
 
-    SJIS 0xF040-0xF9FC 映射到 Unicode U+E000-U+E757 (Private Use Area)
-    这些字符在标准字体中没有字形，无法显示
+    SJIS 0xF040-0xF9FC maps to Unicode U+E000-U+E757 (Private Use Area).
+    These characters have no glyphs in standard fonts and cannot be displayed.
     """
     high = (sjis_code >> 8) & 0xFF
-    # PUA 区域的首字节范围是 0xF0-0xF9
+    # PUA lead byte range: 0xF0-0xF9
     return 0xF0 <= high <= 0xF9
 
 
 def get_category(sjis_code: int) -> str:
-    """根据 Shift-JIS 编码确定字符类别"""
-    # 单字节特殊字符
+    """Determine character category based on Shift-JIS code."""
+    # Single-byte special characters
     if sjis_code == 0x5C:
         return "SPECIAL_SINGLE"
     if sjis_code == 0x7E:
         return "SPECIAL_SINGLE"
 
-    # 单字节 ASCII
+    # Single-byte ASCII
     if 0x20 <= sjis_code <= 0x7F:
         return "ASCII"
 
-    # 半角片假名 (半角片假名)
+    # Halfwidth Katakana
     if 0xA1 <= sjis_code <= 0xDF:
         return "KATAKANA_HALFWIDTH"
 
-    # 双字节字符
+    # Double-byte characters
     if sjis_code > 0xFF:
         high = (sjis_code >> 8) & 0xFF
         low = sjis_code & 0xFF
 
-        # 问题字符 (映射差异)
+        # Problem characters (mapping differences)
         problem_chars = [0x815C, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA]
         if sjis_code in problem_chars:
             return "PROBLEM"
 
-        # 根据区位判断类别
+        # Determine category by JIS row
         try:
             row, col = sjis_to_row_col(sjis_code)
             if 1 <= row <= 2:
@@ -126,51 +126,36 @@ def get_category(sjis_code: int) -> str:
 
 
 def get_description(sjis_code: int, char: str, category: str, for_sjis: bool = False) -> str:
-    """生成字符描述
+    """Generate character description.
 
     Args:
-        sjis_code: Shift-JIS 编码
-        char: 字符
-        category: 类别
-        for_sjis: 是否用于 SJIS 编码文件（避免使用简体中文）
+        sjis_code: Shift-JIS code
+        char: The character
+        category: Category string
+        for_sjis: Whether for SJIS-encoded file (avoid non-SJIS characters)
     """
-    if for_sjis:
-        # SJIS 文件使用英文描述
-        descriptions = {
-            0x5C: "YEN SIGN / BACKSLASH",
-            0x7E: "OVERLINE / TILDE",
-            0x815C: "EM DASH",
-            0x8160: "WAVE DASH / FULLWIDTH TILDE",
-            0x8161: "DOUBLE VERTICAL LINE",
-            0x817C: "MINUS SIGN / FULLWIDTH HYPHEN-MINUS",
-            0x8191: "CENT SIGN",
-            0x8192: "POUND SIGN",
-            0x81CA: "NOT SIGN",
-        }
-    else:
-        # UTF-8 文件可以使用中文描述
-        descriptions = {
-            0x5C: "YEN SIGN / BACKSLASH",
-            0x7E: "OVERLINE / TILDE",
-            0x815C: "EM DASH (破折号)",
-            0x8160: "WAVE DASH / FULLWIDTH TILDE (波浪线)",
-            0x8161: "DOUBLE VERTICAL LINE (双竖线)",
-            0x817C: "MINUS SIGN / FULLWIDTH HYPHEN-MINUS (减号)",
-            0x8191: "CENT SIGN (分币符)",
-            0x8192: "POUND SIGN (英镑符)",
-            0x81CA: "NOT SIGN (非号)",
-        }
+    descriptions = {
+        0x5C: "YEN SIGN / BACKSLASH",
+        0x7E: "OVERLINE / TILDE",
+        0x815C: "EM DASH",
+        0x8160: "WAVE DASH / FULLWIDTH TILDE",
+        0x8161: "DOUBLE VERTICAL LINE",
+        0x817C: "MINUS SIGN / FULLWIDTH HYPHEN-MINUS",
+        0x8191: "CENT SIGN",
+        0x8192: "POUND SIGN",
+        0x81CA: "NOT SIGN",
+    }
 
     if sjis_code in descriptions:
         return descriptions[sjis_code]
 
     category_names = {
         "ASCII": "ASCII character",
-        "KATAKANA_HALFWIDTH": "Halfwidth Katakana (半角片仮名 SJIS:0xA1-0xDF U+FF61-FF9F)",
+        "KATAKANA_HALFWIDTH": "Halfwidth Katakana (SJIS:0xA1-0xDF U+FF61-FF9F)",
         "PUNCTUATION": "Punctuation/Symbol",
         "ALPHANUMERIC": "Fullwidth Alphanumeric",
-        "HIRAGANA_FULLWIDTH": "Fullwidth Hiragana (全角平仮名 SJIS:0x829F-0x82F1 U+3041-3093)",
-        "KATAKANA_FULLWIDTH": "Fullwidth Katakana (全角片仮名 SJIS:0x8340-0x8396 U+30A1-30F6)",
+        "HIRAGANA_FULLWIDTH": "Fullwidth Hiragana (SJIS:0x829F-0x82F1 U+3041-3093)",
+        "KATAKANA_FULLWIDTH": "Fullwidth Katakana (SJIS:0x8340-0x8396 U+30A1-30F6)",
         "GREEK": "Greek letter",
         "CYRILLIC": "Cyrillic letter",
         "BOX_DRAWING": "Box drawing character",
@@ -182,11 +167,11 @@ def get_description(sjis_code: int, char: str, category: str, for_sjis: bool = F
 
 
 def generate_test_data() -> List[dict]:
-    """生成所有测试数据"""
+    """Generate all test data."""
     data = []
     id_counter = 1
 
-    # 1. 问题字符 (最重要的测试点)
+    # 1. Problem characters (most important test points)
     problem_chars = [0x815C, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA]
     for sjis_code in problem_chars:
         try:
@@ -195,6 +180,7 @@ def generate_test_data() -> List[dict]:
             utf8_bytes = char.encode('utf-8')
             unicode_point = ord(char)
 
+            desc = get_description(sjis_code, char, 'PROBLEM')
             data.append({
                 'id': id_counter,
                 'sjis_hex': f'{sjis_code:04X}',
@@ -202,21 +188,21 @@ def generate_test_data() -> List[dict]:
                 'utf8_hex': utf8_bytes.hex().upper(),
                 'unicode': f'U+{unicode_point:04X}',
                 'category': 'PROBLEM',
-                'description': get_description(sjis_code, char, 'PROBLEM', for_sjis=False),
-                'description_sjis': get_description(sjis_code, char, 'PROBLEM', for_sjis=True)
+                'description': desc,
+                'description_sjis': desc
             })
             id_counter += 1
         except Exception as e:
             print(f"Error processing problem char 0x{sjis_code:04X}: {e}")
 
-    # 2. 单字节特殊字符 (0x5C, 0x7E)
+    # 2. Single-byte special characters (0x5C, 0x7E)
     for sjis_code in [0x5C, 0x7E]:
         try:
             sjis_bytes = bytes([sjis_code])
             char = sjis_bytes.decode(SJIS_ENCODING)
             utf8_bytes = char.encode('utf-8')
             unicode_point = ord(char)
-            desc = get_description(sjis_code, char, 'SPECIAL_SINGLE', for_sjis=False)
+            desc = get_description(sjis_code, char, 'SPECIAL_SINGLE')
 
             data.append({
                 'id': id_counter,
@@ -226,15 +212,15 @@ def generate_test_data() -> List[dict]:
                 'unicode': f'U+{unicode_point:04X}',
                 'category': 'SPECIAL_SINGLE',
                 'description': desc,
-                'description_sjis': desc  # 这些描述本来就是英文
+                'description_sjis': desc
             })
             id_counter += 1
         except Exception as e:
             print(f"Error processing single byte 0x{sjis_code:02X}: {e}")
 
-    # 3. ASCII 可打印字符 (0x20-0x7F, 排除 0x5C 和 0x7E)
+    # 3. Printable ASCII characters (0x20-0x7F, excluding 0x5C and 0x7E)
     for sjis_code in range(0x20, 0x80):
-        if sjis_code in [0x5C, 0x7E, 0x7F]:  # 排除特殊字符和 DEL
+        if sjis_code in [0x5C, 0x7E, 0x7F]:  # Exclude special chars and DEL
             continue
         try:
             char = chr(sjis_code)
@@ -255,7 +241,7 @@ def generate_test_data() -> List[dict]:
         except Exception as e:
             print(f"Error processing ASCII 0x{sjis_code:02X}: {e}")
 
-    # 4. 半角片假名 (0xA1-0xDF)
+    # 4. Halfwidth Katakana (0xA1-0xDF)
     for sjis_code in range(0xA1, 0xE0):
         try:
             sjis_bytes = bytes([sjis_code])
@@ -277,11 +263,11 @@ def generate_test_data() -> List[dict]:
         except Exception as e:
             print(f"Error processing halfwidth katakana 0x{sjis_code:02X}: {e}")
 
-    # 5. 双字节字符 (全量遍历)
-    # 首字节范围: 0x81-0x9F, 0xE0-0xFC
-    # 次字节范围: 0x40-0x7E, 0x80-0xFC
+    # 5. Double-byte characters (full enumeration)
+    # Lead byte range: 0x81-0x9F, 0xE0-0xFC
+    # Trail byte range: 0x40-0x7E, 0x80-0xFC
 
-    processed_problem = set(problem_chars)  # 问题字符已经处理过
+    processed_problem = set(problem_chars)  # Problem chars already processed
 
     for high in list(range(0x81, 0xA0)) + list(range(0xE0, 0xFD)):
         for low in list(range(0x40, 0x7F)) + list(range(0x80, 0xFD)):
@@ -293,7 +279,7 @@ def generate_test_data() -> List[dict]:
             if not is_valid_sjis_doublebyte(sjis_code):
                 continue
 
-            # 排除 PUA (私有使用区) 字符 - 这些字符无法在标准字体中显示
+            # Exclude PUA (Private Use Area) characters - no glyphs in standard fonts
             if is_pua_character(sjis_code):
                 continue
 
@@ -316,17 +302,17 @@ def generate_test_data() -> List[dict]:
                 })
                 id_counter += 1
             except (UnicodeDecodeError, UnicodeEncodeError):
-                # 无效的编码，跳过
+                # Invalid encoding, skip
                 pass
             except Exception as e:
-                # 其他错误，记录但继续
+                # Other errors, log and continue
                 pass
 
     return data
 
 
 def write_csv_utf8(data: List[dict], filename: str):
-    """写入 UTF-8 编码的 CSV 文件"""
+    """Write UTF-8 encoded CSV file."""
     fieldnames = ['id', 'sjis_hex', 'char', 'utf8_hex', 'unicode', 'category', 'description']
     with open(filename, 'w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
@@ -336,14 +322,14 @@ def write_csv_utf8(data: List[dict], filename: str):
 
 
 def write_csv_sjis(data: List[dict], filename: str):
-    """写入 Shift-JIS 编码的 CSV 文件"""
+    """Write Shift-JIS encoded CSV file."""
     fieldnames = ['id', 'sjis_hex', 'char', 'utf8_hex', 'unicode', 'category', 'description']
     with open(filename, 'w', encoding=SJIS_ENCODING, newline='', errors='replace') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
         for row in data:
             try:
-                # 使用 SJIS 兼容的描述
+                # Use SJIS-compatible description
                 safe_row = row.copy()
                 safe_row['description'] = row.get('description_sjis', row['description'])
                 writer.writerow(safe_row)
@@ -356,7 +342,7 @@ def write_csv_sjis(data: List[dict], filename: str):
 
 
 def write_html_utf8(data: List[dict], filename: str):
-    """生成 UTF-8 编码的验证网页"""
+    """Generate UTF-8 encoded verification web page."""
     html = '''<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -376,21 +362,21 @@ def write_html_utf8(data: List[dict], filename: str):
     </style>
 </head>
 <body>
-    <h1>JA16SJISTILDE 测试数据验证 (UTF-8)</h1>
+    <h1>JA16SJISTILDE Test Data Verification (UTF-8)</h1>
     <div class="stats">
-        <strong>统计:</strong> 共 ''' + str(len(data)) + ''' 个字符<br>
-        <strong>编码:</strong> 此文件使用 UTF-8 编码<br>
-        <strong>验证方法:</strong> 检查所有字符是否正确显示，无乱码
+        <strong>Statistics:</strong> Total ''' + str(len(data)) + ''' characters<br>
+        <strong>Encoding:</strong> This file is encoded in UTF-8<br>
+        <strong>Verification:</strong> Check that all characters display correctly without garbled text
     </div>
     <table>
         <tr>
             <th>ID</th>
             <th>SJIS Hex</th>
-            <th>字符</th>
+            <th>Char</th>
             <th>UTF-8 Hex</th>
             <th>Unicode</th>
-            <th>类别</th>
-            <th>说明</th>
+            <th>Category</th>
+            <th>Description</th>
         </tr>
 '''
 
@@ -401,7 +387,7 @@ def write_html_utf8(data: List[dict], filename: str):
         elif row['category'] == 'SPECIAL_SINGLE':
             row_class = 'class="special"'
 
-        # 对特殊 HTML 字符进行转义
+        # Escape special HTML characters
         char_display = row['char']
         if char_display == '<':
             char_display = '&lt;'
@@ -425,9 +411,9 @@ def write_html_utf8(data: List[dict], filename: str):
 
     html += '''    </table>
     <div class="stats">
-        <strong>特别注意:</strong><br>
-        - 红色高亮行是"问题字符"，这些字符在不同实现中映射不同<br>
-        - 黄色高亮行是单字节特殊字符 (0x5C, 0x7E)
+        <strong>Note:</strong><br>
+        - Red highlighted rows are "problem characters" that map differently across implementations<br>
+        - Yellow highlighted rows are single-byte special characters (0x5C, 0x7E)
     </div>
 </body>
 </html>
@@ -439,7 +425,7 @@ def write_html_utf8(data: List[dict], filename: str):
 
 
 def write_html_sjis(data: List[dict], filename: str):
-    """生成 Shift-JIS 编码的验证网页"""
+    """Generate Shift-JIS encoded verification web page."""
     html = '''<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -459,21 +445,21 @@ def write_html_sjis(data: List[dict], filename: str):
     </style>
 </head>
 <body>
-    <h1>JA16SJISTILDE 検証データ (Shift_JIS)</h1>
+    <h1>JA16SJISTILDE Verification Data (Shift_JIS)</h1>
     <div class="stats">
-        <strong>統計:</strong> 全 ''' + str(len(data)) + ''' 文字<br>
-        <strong>エンコード:</strong> このファイルは Shift_JIS でエンコードされています<br>
-        <strong>検証方法:</strong> 全ての文字が正しく表示されているか確認してください
+        <strong>Statistics:</strong> Total ''' + str(len(data)) + ''' characters<br>
+        <strong>Encoding:</strong> This file is encoded in Shift_JIS<br>
+        <strong>Verification:</strong> Check that all characters display correctly
     </div>
     <table>
         <tr>
             <th>ID</th>
             <th>SJIS Hex</th>
-            <th>文字</th>
+            <th>Char</th>
             <th>UTF-8 Hex</th>
             <th>Unicode</th>
-            <th>カテゴリ</th>
-            <th>説明</th>
+            <th>Category</th>
+            <th>Description</th>
         </tr>
 '''
 
@@ -494,7 +480,7 @@ def write_html_sjis(data: List[dict], filename: str):
         elif char_display == '"':
             char_display = '&quot;'
 
-        # 使用 SJIS 兼容的描述（纯英文）
+        # Use SJIS-compatible description (English only)
         desc = row.get('description_sjis', row['description'])
 
         html += f'''        <tr {row_class}>
@@ -510,9 +496,9 @@ def write_html_sjis(data: List[dict], filename: str):
 
     html += '''    </table>
     <div class="stats">
-        <strong>注意:</strong><br>
-        - 赤色のハイライト行は「問題文字」です（異なる実装でマッピングが異なる）<br>
-        - 黄色のハイライト行はシングルバイト特殊文字 (0x5C, 0x7E)
+        <strong>Note:</strong><br>
+        - Red highlighted rows are "problem characters" that map differently across implementations<br>
+        - Yellow highlighted rows are single-byte special characters (0x5C, 0x7E)
     </div>
 </body>
 </html>
@@ -524,7 +510,7 @@ def write_html_sjis(data: List[dict], filename: str):
 
 
 def write_expected_utf8(data: List[dict], filename: str):
-    """生成预期的 UTF-8 导出结果 (简化格式，只包含 id 和字符)"""
+    """Generate expected UTF-8 export results (simplified: id and char only)."""
     with open(filename, 'w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['id', 'char_data'])
         writer.writeheader()
@@ -537,19 +523,19 @@ def write_expected_utf8(data: List[dict], filename: str):
 
 
 def print_summary(data: List[dict]):
-    """打印数据统计摘要"""
+    """Print data statistics summary."""
     categories = {}
     for row in data:
         cat = row['category']
         categories[cat] = categories.get(cat, 0) + 1
 
-    print("\n=== 测试数据统计 ===")
-    print(f"总字符数: {len(data)}")
-    print("\n按类别分布:")
+    print("\n=== Test Data Statistics ===")
+    print(f"Total characters: {len(data)}")
+    print("\nDistribution by category:")
     for cat, count in sorted(categories.items(), key=lambda x: -x[1]):
         print(f"  {cat}: {count}")
 
-    print("\n=== 问题字符列表 (映射差异) ===")
+    print("\n=== Problem Characters (mapping differences) ===")
     for row in data:
         if row['category'] == 'PROBLEM':
             print(f"  SJIS 0x{row['sjis_hex']} -> {row['char']} -> UTF-8 {row['utf8_hex']} ({row['unicode']}) - {row['description']}")
@@ -559,24 +545,24 @@ def main():
     print("Generating JA16SJISTILDE test data...")
     print(f"Using encoding: {SJIS_ENCODING}")
 
-    # 生成测试数据
+    # Generate test data
     data = generate_test_data()
 
-    # 输出目录
+    # Output directory
     output_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # 写入文件
+    # Write files
     write_csv_utf8(data, os.path.join(output_dir, 'test_data.csv'))
     write_csv_sjis(data, os.path.join(output_dir, 'test_data_sjis.csv'))
     write_html_utf8(data, os.path.join(output_dir, 'verify_utf8.html'))
     write_html_sjis(data, os.path.join(output_dir, 'verify_sjis.html'))
     write_expected_utf8(data, os.path.join(output_dir, 'expected_utf8.csv'))
 
-    # 打印统计
+    # Print statistics
     print_summary(data)
 
-    print("\n=== 完成 ===")
-    print("请用浏览器打开 verify_utf8.html 和 verify_sjis.html 进行手工验证。")
+    print("\n=== Done ===")
+    print("Open verify_utf8.html and verify_sjis.html in a browser for manual verification.")
 
 
 if __name__ == '__main__':
