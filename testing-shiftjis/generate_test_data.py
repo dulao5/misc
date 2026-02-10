@@ -82,9 +82,9 @@ def get_category(sjis_code: int) -> str:
     if 0x20 <= sjis_code <= 0x7F:
         return "ASCII"
 
-    # 半角片假名
+    # 半角片假名 (半角片假名)
     if 0xA1 <= sjis_code <= 0xDF:
-        return "HALFWIDTH_KATAKANA"
+        return "KATAKANA_HALFWIDTH"
 
     # 双字节字符
     if sjis_code > 0xFF:
@@ -104,9 +104,9 @@ def get_category(sjis_code: int) -> str:
             elif row == 3:
                 return "ALPHANUMERIC"
             elif row == 4:
-                return "HIRAGANA"
+                return "HIRAGANA_FULLWIDTH"
             elif row == 5:
-                return "KATAKANA"
+                return "KATAKANA_FULLWIDTH"
             elif row == 6:
                 return "GREEK"
             elif row == 7:
@@ -166,11 +166,11 @@ def get_description(sjis_code: int, char: str, category: str, for_sjis: bool = F
 
     category_names = {
         "ASCII": "ASCII character",
-        "HALFWIDTH_KATAKANA": "Halfwidth Katakana",
+        "KATAKANA_HALFWIDTH": "Halfwidth Katakana (半角片仮名 SJIS:0xA1-0xDF U+FF61-FF9F)",
         "PUNCTUATION": "Punctuation/Symbol",
         "ALPHANUMERIC": "Fullwidth Alphanumeric",
-        "HIRAGANA": "Hiragana",
-        "KATAKANA": "Fullwidth Katakana",
+        "HIRAGANA_FULLWIDTH": "Fullwidth Hiragana (全角平仮名 SJIS:0x829F-0x82F1 U+3041-3093)",
+        "KATAKANA_FULLWIDTH": "Fullwidth Katakana (全角片仮名 SJIS:0x8340-0x8396 U+30A1-30F6)",
         "GREEK": "Greek letter",
         "CYRILLIC": "Cyrillic letter",
         "BOX_DRAWING": "Box drawing character",
@@ -261,7 +261,7 @@ def generate_test_data() -> List[dict]:
             sjis_bytes = bytes([sjis_code])
             char = sjis_bytes.decode(SJIS_ENCODING)
             utf8_bytes = char.encode('utf-8')
-            desc = get_description(sjis_code, char, 'HALFWIDTH_KATAKANA')
+            desc = get_description(sjis_code, char, 'KATAKANA_HALFWIDTH')
 
             data.append({
                 'id': id_counter,
@@ -269,7 +269,7 @@ def generate_test_data() -> List[dict]:
                 'char': char,
                 'utf8_hex': utf8_bytes.hex().upper(),
                 'unicode': f'U+{ord(char):04X}',
-                'category': 'HALFWIDTH_KATAKANA',
+                'category': 'KATAKANA_HALFWIDTH',
                 'description': desc,
                 'description_sjis': desc
             })
